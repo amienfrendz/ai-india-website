@@ -57,29 +57,81 @@ document.addEventListener('DOMContentLoaded', function () {
         var naturalVoice = null;
         var indianVoice = null;
         var englishVoice = null;
+        var googleVoice = null;
 
         voices.forEach(function (voice) {
             var name = (voice.name || '').toLowerCase();
             var lang = (voice.lang || '').toLowerCase();
 
-            // Priority 1: Natural voices (Windows 11 high-quality voices)
-            if (!naturalVoice && name.indexOf('natural') !== -1 && lang.indexOf('en') === 0) {
+            // Priority 1: Natural/enhanced voices (Windows 11, iOS enhanced)
+            if (!naturalVoice && lang.indexOf('en') === 0 && (name.indexOf('natural') !== -1 || name.indexOf('enhanced') !== -1 || name.indexOf('premium') !== -1)) {
                 naturalVoice = voice;
             }
-            // Priority 2: Indian English voice
+            // Priority 2: Google voices on Android (high quality)
+            if (!googleVoice && lang.indexOf('en') === 0 && name.indexOf('google') !== -1) {
+                googleVoice = voice;
+            }
+            // Priority 3: Indian English voice
             if (!indianVoice && (lang.indexOf('en-in') === 0 || name.indexOf('india') !== -1)) {
                 indianVoice = voice;
             }
-            // Priority 3: Any English voice that sounds good (Zira, Aria, David)
-            if (!englishVoice && lang.indexOf('en') === 0 && (name.indexOf('zira') !== -1 || name.indexOf('aria') !== -1 || name.indexOf('david') !== -1 || name.indexOf('mark') !== -1)) {
+            // Priority 4: Known good English voices
+            if (!englishVoice && lang.indexOf('en') === 0 && (name.indexOf('samantha') !== -1 || name.indexOf('karen') !== -1 || name.indexOf('zira') !== -1 || name.indexOf('aria') !== -1 || name.indexOf('david') !== -1)) {
                 englishVoice = voice;
             }
         });
 
-        return naturalVoice || indianVoice || englishVoice || (voices.length > 0 ? voices[0] : null);
+        return naturalVoice || googleVoice || indianVoice || englishVoice || (voices.length > 0 ? voices[0] : null);
+    }
+
+    // Split text into chunks to avoid mobile Chrome cutting off long utterances
+    function splitIntoChunks(text) {
+        var sentences = text.split(/(?<=\.\.\.)|(?<=\.)\s+/);
+        var chunks = [];
+        var current = '';
+        for (var i = 0; i < sentences.length; i++) {
+            if ((current + ' ' + sentences[i]).length > 200) {
+                if (current) chunks.push(current.trim());
+                current = sentences[i];
+            } else {
+                current = current ? current + ' ' + sentences[i] : sentences[i];
+            }
+        }
+        if (current) chunks.push(current.trim());
+        return chunks;
+    }
+
+    var chunks = splitIntoChunks(summaryScript);
+    var currentChunk = 0;
+    var isSpeaking = false;
+
+    function speakChunk(index) {
+        if (index >= chunks.length) {
+            isSpeaking = false;
+            hasStarted = false;
+            setStatus('Finished! Click Play to listen again', false, '<i class="fas fa-play"></i>');
+            return;
+        }
+        utterance = new SpeechSynthesisUtterance(chunks[index]);
+        utterance.rate = 0.92;
+        utterance.pitch = 1.0;
+        utterance.voice = pickVoice();
+        utterance.onend = function () {
+            currentChunk++;
+            if (isSpeaking) {
+                speakChunk(currentChunk);
+            }
+        };
+        utterance.onerror = function () {
+            isSpeaking = false;
+            hasStarted = false;
+            setStatus('Audio unavailable right now', false, '<i class="fas fa-play"></i>');
+        };
+        synth.speak(utterance);
     }
 
     function buildUtterance() {
+        // kept for compatibility but chunked speech is used instead
         utterance = new SpeechSynthesisUtterance(summaryScript);
         utterance.rate = 0.92;
         utterance.pitch = 1.0;
@@ -108,28 +160,42 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function startSpeech() {
         synth.cancel();
-        buildUtterance();
-        synth.speak(utterance);
+        currentChunk = 0;
+        isSpeaking = true;
+        hasStarted = true;
+        setStatus('Playing...', true, '<i class="fas fa-pause"></i>');
+        speakChunk(0);
+    }
+
+    // Wait for voices to load (important on mobile)
+    if (synth.getVoices().length === 0) {
+        synth.addEventListener('voiceschanged', function () {
+            chunks = splitIntoChunks(summaryScript);
+        });
     }
 
     playPauseButton.addEventListener('click', function () {
-        if (synth.speaking) {
+        if (isSpeaking && synth.speaking) {
             if (synth.paused) {
                 synth.resume();
+                setStatus('Playing...', true, '<i class="fas fa-pause"></i>');
             } else {
                 synth.pause();
+                setStatus('Paused', false, '<i class="fas fa-play"></i>');
             }
             return;
         }
 
-        if (!hasStarted || !utterance) {
+        if (!isSpeaking) {
             startSpeech();
         }
     });
 
     stopButton.addEventListener('click', function () {
+        isSpeaking = false;
         synth.cancel();
         hasStarted = false;
+        currentChunk = 0;
         utterance = null;
         setStatus('Stopped. Click Play to listen again', false, '<i class="fas fa-play"></i>');
     });
