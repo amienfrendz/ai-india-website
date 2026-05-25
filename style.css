@@ -23,8 +23,6 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     background: linear-gradient(135deg, #fffaf0, #eef8ff, #f6f0ff);
-    background-size: 220% 220%;
-    animation: dreamyBackground 16s ease infinite;
 }
 
 body::before {
@@ -35,6 +33,12 @@ body::before {
     background-image: radial-gradient(rgba(255, 255, 255, 0.7) 1px, transparent 1px);
     background-size: 24px 24px;
     opacity: 0.35;
+}
+
+@media (max-width: 768px) {
+    body::before {
+        display: none;
+    }
 }
 
 a {
@@ -336,7 +340,8 @@ img {
     transition: opacity 0.6s ease, transform 0.6s ease;
 }
 
-.reveal.visible {
+.reveal.visible,
+.no-js .reveal {
     opacity: 1;
     transform: translateY(0);
 }

@@ -1,4 +1,4 @@
-﻿document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function () {
     var revealItems = document.querySelectorAll('.reveal');
 
     if ('IntersectionObserver' in window) {
@@ -9,11 +9,20 @@
                     observer.unobserve(entry.target);
                 }
             });
-        }, { threshold: 0.15 });
+        }, { threshold: 0.05, rootMargin: '0px 0px 200px 0px' });
 
         revealItems.forEach(function (item) {
             observer.observe(item);
         });
+
+        // Fallback: reveal all items after 3 seconds in case observer doesn't fire (mobile)
+        setTimeout(function () {
+            revealItems.forEach(function (item) {
+                if (!item.classList.contains('visible')) {
+                    item.classList.add('visible');
+                }
+            });
+        }, 3000);
     } else {
         revealItems.forEach(function (item) {
             item.classList.add('visible');
